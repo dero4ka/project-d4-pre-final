@@ -1,0 +1,10 @@
+{
+  "name": "discord-mod-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Панель модератора Discord: вход через Discord и выбор сервера (статический сайт для GitHub Pages)",
+  "scripts": {
+    "test": "node test/unit.js && node test/endpoint.test.mjs",
+    "endpoint": "node endpoint/node.mjs"
+  }
+}

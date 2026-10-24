@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interactions Endpoint</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #05020b; overflow: hidden; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(ellipse at 50% 50%, #1a0a33 0%, #0a0414 55%, #030108 100%);
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+    .caption {
+      position: fixed; left: 0; right: 0; bottom: 28px; text-align: center; pointer-events: none;
+      color: rgba(255, 255, 255, 0.55); font-size: 13px; letter-spacing: 0.32em; text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c" aria-label="Бесконечность из белых точек, которые раздвигаются при наведении курсора" role="img"></canvas>
+  <div class="caption">Interactions Endpoint</div>
+
+  <script>
+  (() => {
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let w = 0, h = 0, dpr = 1;
+    let dots = [];
+    const pointer = { x: -9999, y: -9999, active: false };
+
+    // Лемниската Бернулли: x = a·cos t / (1 + sin² t), y = a·sin t·cos t / (1 + sin² t)
+    const lemniscate = (t) => {
+      const s = Math.sin(t), c = Math.cos(t), d = 1 + s * s;
+      return { x: c / d, y: (s * c) / d };
+    };
+
+    // Точки с равным шагом ПО ДЛИНЕ ЛИНИИ (а не по параметру t, иначе у краёв они слипаются)
+    function buildDots() {
+      // half — полуширина фигуры; её полувысота ≈ 0.354·half, поэтому ограничиваем и по ширине, и по высоте
+      const half = Math.min(w * 0.36, (h * 0.34) / 0.354, 520);
+      const cx = w / 2, cy = h / 2;
+      const SAMPLES = 4000;
+      const pts = [], cum = [0];
+      for (let i = 0; i <= SAMPLES; i++) {
+        const p = lemniscate((i / SAMPLES) * Math.PI * 2);
+        pts.push(p);
+        if (i) cum.push(cum[i - 1] + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y));
+      }
+      const total = cum[SAMPLES];
+      const count = Math.max(140, Math.min(420, Math.round(half * 0.9)));
+      dots = [];
+      let j = 0;
+      for (let k = 0; k < count; k++) {
+        const target = (k / count) * total;
+        while (j < SAMPLES && cum[j + 1] < target) j++;
+        const f = (target - cum[j]) / ((cum[j + 1] - cum[j]) || 1);
+        const px = pts[j].x + (pts[j + 1].x - pts[j].x) * f;
+        const py = pts[j].y + (pts[j + 1].y - pts[j].y) * f;
+        const hx = cx + px * half, hy = cy + py * half;
+        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, r: 1.5 + Math.abs(px) * 1.5, phase: (k / count) * Math.PI * 2 });
+      }
+      window.__infinity = { dots, get radius() { return R(); } };
+    }
+
+    const R = () => Math.max(70, Math.min(150, Math.min(w, h) * 0.16)); // радиус действия курсора
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth; h = window.innerHeight;
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      buildDots();
+    }
+
+    function step(t) {
+      const radius = R();
+      for (const d of dots) {
+        // Пружина к своему месту
+        let fx = (d.hx - d.x) * 0.045;
+        let fy = (d.hy - d.y) * 0.045;
+        // Раздвигание: чем ближе курсор, тем сильнее выталкивает точку
+        if (pointer.active) {
+          const dx = d.x - pointer.x, dy = d.y - pointer.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < radius) {
+            const k = 1 - dist / radius;
+            const push = k * k * 7.5;
+            const nx = dist > 0.001 ? dx / dist : Math.cos(d.phase);
+            const ny = dist > 0.001 ? dy / dist : Math.sin(d.phase);
+            fx += nx * push; fy += ny * push;
+          }
+        }
+        d.vx = (d.vx + fx) * 0.84;
+        d.vy = (d.vy + fy) * 0.84;
+        d.x += d.vx; d.y += d.vy;
+      }
+    }
+
+    function draw(t) {
+      ctx.clearRect(0, 0, w, h);
+      for (const d of dots) {
+        const shimmer = reduceMotion ? 0.85 : 0.65 + 0.35 * Math.sin(t / 700 - d.phase * 3);
+        const disp = Math.hypot(d.x - d.hx, d.y - d.hy);
+        const a = Math.min(1, shimmer + disp / 80);
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r + Math.min(disp / 40, 1.2), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.shadowColor = 'rgba(255,255,255,0.8)';
+        ctx.shadowBlur = 6 + Math.min(disp / 4, 10);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    function frame(t) { step(t); draw(t); requestAnimationFrame(frame); }
+
+    const setPointer = (e) => { clearTimeout(releaseTimer); pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true; };
+    window.addEventListener('pointermove', setPointer, { passive: true });
+    window.addEventListener('pointerdown', setPointer, { passive: true });
+    // Для касания: после отпускания пальца удерживаем «отталкивание» ещё ~0.35 с, чтобы даже быстрый тап был заметен
+    let releaseTimer = 0;
+    window.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse') return;
+      clearTimeout(releaseTimer);
+      releaseTimer = setTimeout(() => { pointer.active = false; }, 350);
+    });
+    window.addEventListener('pointercancel', () => { pointer.active = false; });
+    // Для касания браузер сам шлёт pointerleave сразу после отпускания пальца, поэтому реагируем только на мышь
+    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') pointer.active = false; });
+    window.addEventListener('blur', () => { pointer.active = false; });
+    window.addEventListener('resize', resize);
+
+    resize();
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>

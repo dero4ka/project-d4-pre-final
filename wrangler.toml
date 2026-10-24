@@ -1,0 +1,6 @@
+name = "discord-interactions"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# [vars]
+# PAGE_URL = "https://ИМЯ.github.io/РЕПОЗИТОРИЙ/interactions.html"

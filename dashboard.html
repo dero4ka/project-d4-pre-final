@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Выбор сервера</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="blobs" aria-hidden="true"><div class="blob"></div><div class="blob"></div><div class="blob"></div></div>
+
+  <main class="container">
+    <header class="glass top reveal" style="--i:0">
+      <div class="me">
+        <img id="avatar" alt="" width="46" height="46">
+        <div>
+          <div class="name" id="username">…</div>
+          <div class="sub">Модератор</div>
+        </div>
+      </div>
+      <button class="btn ghost" id="logout">Выйти</button>
+    </header>
+
+    <h2 class="reveal" style="--i:1">Твои серверы</h2>
+    <p class="section-sub reveal" style="--i:2">Показаны серверы, где у тебя есть права модератора. Выбери, с каким работать.</p>
+
+    <div class="spinner" id="spinner"></div>
+    <div class="grid" id="grid"></div>
+
+    <div class="glass banner" id="banner"></div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const goHome = (code) => location.replace('index.html' + (code ? '?error=' + code : ''));
+    let userId = null;
+    let selected = null;
+
+    function showBanner(guild) {
+      const b = $('banner');
+      b.innerHTML = `✅ Выбран сервер <strong>${esc(guild.name)}</strong>`;
+      b.classList.add('show');
+    }
+
+    function render(guilds) {
+      const grid = $('grid');
+      if (!guilds.length) {
+        grid.innerHTML = '<div class="glass empty reveal" style="grid-column:1/-1">Нет серверов с правами модератора.</div>';
+        return;
+      }
+      grid.innerHTML = guilds.map((g, i) => `
+        <button class="glass guild reveal ${g.id === selected ? 'selected' : ''}" style="--i:${Math.min(i, 10) + 3}" data-id="${esc(g.id)}">
+          ${g.icon
+            ? `<img class="icon" src="${esc(g.icon)}" alt="">`
+            : `<div class="icon">${esc(g.name.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase())}</div>`}
+          <div class="gname">${esc(g.name)}</div>
+          <span class="badge">${g.owner ? '👑 Владелец' : g.admin ? '⚙️ Админ' : '🛡️ Модератор'}</span>
+        </button>`).join('');
+
+      grid.querySelectorAll('.guild').forEach((el) => {
+        el.addEventListener('click', () => {
+          const guild = guilds.find((g) => g.id === el.dataset.id);
+          if (!guild) return;
+          selected = guild.id;
+          ModApp.setSelected(userId, guild.id);
+          grid.querySelectorAll('.guild').forEach((x) => x.classList.toggle('selected', x === el));
+          showBanner(guild);
+        });
+      });
+      const cur = guilds.find((g) => g.id === selected);
+      if (cur) showBanner(cur);
+    }
+
+    (async () => {
+      // Возврат из Discord: забираем токен из адреса (и сразу стираем его оттуда)
+      const cb = ModApp.consumeCallback();
+      if (cb && cb.error) return goHome(cb.error);
+      if (!ModApp.getAuth()) return goHome();
+
+      try {
+        const [me, raw] = await Promise.all([ModApp.api('/users/@me'), ModApp.api('/users/@me/guilds')]);
+        userId = me.id;
+        $('username').textContent = me.global_name || me.username;
+        $('avatar').src = ModApp.avatarUrl(me);
+        const guilds = ModApp.mapGuilds(raw).filter((g) => g.moderated);
+        const saved = ModApp.getSelected(userId);
+        selected = guilds.some((g) => g.id === saved) ? saved : null;
+        $('spinner').remove();
+        render(guilds);
+      } catch (e) {
+        if (e.status === 401) return goHome('session_expired');
+        $('spinner').remove();
+        $('grid').innerHTML = `<div class="glass empty" style="grid-column:1/-1">${e.status === 429
+          ? 'Discord просит подождать. Попробуй через минуту.'
+          : 'Не удалось связаться с Discord.'} Обнови страницу.</div>`;
+      }
+    })();
+
+    $('logout').addEventListener('click', () => { ModApp.logout(); goHome(); });
+  </script>
+</body>
+</html>
