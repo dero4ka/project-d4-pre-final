@@ -8,8 +8,8 @@ window.APP_CONFIG = {
   // То же значение лежит в endpoint/config.mjs: при смене меняй в обоих местах (тест это проверяет).
   PUBLIC_KEY: '2591efe525f83833812e151404de37ecf440aeeb987944885ee6c796b32b230a',
 
-  // Необязательно. Если пусто, берётся адрес страницы dashboard.html рядом с index.html,
-  // например https://ИМЯ.github.io/РЕПОЗИТОРИЙ/dashboard.html
-  // Этот адрес нужно добавить в Discord Developer Portal -> OAuth2 -> Redirects (точное совпадение).
-  REDIRECT_URI: '',
+  // Адрес страницы dashboard.html на GitHub Pages. Его нужно добавить в Discord Developer Portal ->
+  // OAuth2 -> Redirects ТОЧНО в таком же виде (и нажать Save Changes). Если оставить пустым,
+  // адрес берётся автоматически из места, где открыт сайт.
+  REDIRECT_URI: 'https://dero4ka.github.io/project-d4-pre-final/dashboard.html',
 };
